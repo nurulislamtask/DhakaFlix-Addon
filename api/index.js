@@ -2,7 +2,7 @@ import { CONFIG, buildIndex, fileUrl, filesFor, lookup, makeId, parseEpisode, pa
 
 const MANIFEST = {
   id: 'community.dhakaflix.bdix',
-  version: '2.0.0',
+  version: '2.1.0',
   name: 'DhakaFlix BDIX',
   description: 'Movies & series from the DhakaFlix open directory, with a real poster for every title.',
   logo: 'https://raw.githubusercontent.com/nurulislamtask/DhakaFlix-Addon/main/chrome-extension-legacy/public/logo512.png',
