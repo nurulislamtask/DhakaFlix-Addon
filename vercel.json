@@ -1,12 +1,38 @@
 {
   "version": 2,
-  "regions": ["sin1"],
-  "functions": { "api/index.js": { "maxDuration": 60, "memory": 1024 } },
+  "framework": null,
+  "installCommand": "",
+  "buildCommand": "",
+  "outputDirectory": "public",
+  "regions": [
+    "sin1"
+  ],
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
   "rewrites": [
-    { "source": "/manifest.json", "destination": "/api/index?p=manifest.json" },
-    { "source": "/catalog/:rest*", "destination": "/api/index?p=catalog/:rest*" },
-    { "source": "/meta/:rest*", "destination": "/api/index?p=meta/:rest*" },
-    { "source": "/stream/:rest*", "destination": "/api/index?p=stream/:rest*" },
-    { "source": "/poster/:rest*", "destination": "/api/index?p=poster/:rest*" }
+    {
+      "source": "/manifest.json",
+      "destination": "/api/index?p=manifest.json"
+    },
+    {
+      "source": "/catalog/:rest*",
+      "destination": "/api/index?p=catalog/:rest*"
+    },
+    {
+      "source": "/meta/:rest*",
+      "destination": "/api/index?p=meta/:rest*"
+    },
+    {
+      "source": "/stream/:rest*",
+      "destination": "/api/index?p=stream/:rest*"
+    },
+    {
+      "source": "/poster/:rest*",
+      "destination": "/api/index?p=poster/:rest*"
+    }
   ]
 }
