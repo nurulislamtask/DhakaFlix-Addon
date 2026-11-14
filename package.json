@@ -4,6 +4,12 @@
   "private": true,
   "type": "module",
   "description": "DhakaFlix BDIX add-on for GooWatch / Stremio (Vercel)",
-  "engines": { "node": ">=18" },
-  "scripts": { "test": "node test/run.mjs" }
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node test/run.mjs",
+    "start": "node server.js",
+    "build-index": "node scripts/build-index.mjs"
+  }
 }
