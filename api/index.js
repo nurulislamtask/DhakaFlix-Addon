@@ -1,4 +1,4 @@
-import { CONFIG, buildIndex, fileUrl, lookup, makeId, parseEpisode, parseId, parseTitle, placeholderSvg, videosUnder, isVideo, listDir } from '../lib/dflix.js';
+import { CONFIG, buildIndex, fileUrl, filesFor, lookup, makeId, parseEpisode, parseId, parseTitle, placeholderSvg, isVideo, listDir } from '../lib/dflix.js';
 
 const MANIFEST = {
   id: 'community.dhakaflix.bdix',
@@ -96,7 +96,7 @@ async function meta(req, type, id) {
     runtime: hit?.runtime,
   };
   if (type === 'series') {
-    const files = isVideo(raw) ? [{ name: raw, path }] : await videosUnder(path, 3);
+    const files = isVideo(raw) ? [{ name: raw, path }] : await filesFor(path, 3);
     let n = 0;
     const vids = files.map((f) => {
       const ep = parseEpisode(f.name) || parseEpisode(f.path);
@@ -117,7 +117,7 @@ async function stream(type, id) {
   const name = path.split('/').pop();
   let files;
   if (isVideo(name)) files = [{ name, path }];
-  else files = await videosUnder(path, 2);
+  else files = await filesFor(path, 2);
   return {
     streams: files.map((f) => ({
       name: 'DhakaFlix',
