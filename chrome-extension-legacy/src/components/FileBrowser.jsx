@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from '../services/api';
 import { favoritesService, watchLaterService } from '../services/storage';
 
@@ -75,21 +75,43 @@ const getFolderIcon = (folderName) => {
   return '📁';
 };
 
-// Extract media name from filename
+// Clean a file/folder name down to the bare title + year for poster lookups.
+// e.g. "18th Rose (2026) 720p NF [Dual Audio]" -> { title: "18th Rose", year: 2026 }
+// The full cleaned title is used — never truncated to a few words, so long
+// titles like "10 Things I Hate About You" survive intact.
 const extractMediaName = (file) => {
-  // Use full filename from path if available
-  const filename = file.path ? file.path.split('/').pop() : file.name;
-  let name = filename
-    .replace(/\([0-9]{4}\)/, '') // Remove year
-    .replace(/S\d{2}E\d{2}/gi, '') // Remove season/episode
-    .replace(/Season\s*\d+/gi, '') // Remove season
-    .replace(/Episode\s*\d+/gi, '') // Remove episode
-    .replace(/WEBRip|DVDRip|BluRay|HDTV|x264|x265|HEVC|H264|1080p|720p|480p|2160p|4K/gi, '')
-    .replace(/\.mkv|\.mp4|\.avi|\.mov|\.webm|\.m4v|\.wmv|\.flv/gi, '')
-    .replace(/[._]/g, ' ')
-    .trim();
-  const words = name.split(' ').filter(w => w.length > 0);
-  return words.slice(0, 5).join(' ');
+  const rawName = file.path ? file.path.split('/').pop() : file.name;
+  let name = decodeHtmlEntities(rawName || '');
+  // Strip the video file extension.
+  name = name.replace(/\.(mkv|mp4|avi|mov|webm|m4v|wmv|flv|ts|mts|mpg|mpeg|3gp)$/i, '');
+
+  const cleanTail = (s) => {
+    let t = s;
+    // Cut any bracketed tag tail: "[Dual Audio]", "(Dual Audio)", "[Hindi]", ...
+    t = t.replace(/[\[(].*$/, '');
+    // Season / episode markers.
+    t = t.replace(/\bS\d{1,2}E\d{1,3}\b/gi, ' ');
+    t = t.replace(/\bSeason\s*\d+.*$/gi, ' ');
+    t = t.replace(/\bEpisode\s*\d+.*$/gi, ' ');
+    // Quality / codec / source / language / release tags.
+    t = t.replace(/\b(2160p|1080p|720p|480p|360p|4K|UHD|BluRay|Blu-Ray|BRRip|BDRip|WEB-?DL|WEBRip|HDRip|HDTV|DVDRip|DVDScr|x26[45]|H\.?26[45]|HEVC|AAC|AC3|DD5\.1|DTS|NF|AMZN|Netflix|Amazon|Dual[\s-]?Audio|Multi[\s-]?Audio|Hindi|Bangla|Bengali|English|Dubbed|ESub|Subbed|Proper|Repack|Extended|Unrated|Remastered|Complete)\b/gi, ' ');
+    // Separators become spaces; drop leftover dashes and collapse whitespace.
+    t = t.replace(/[._]+/g, ' ').replace(/\s+-\s*/g, ' ').replace(/\s+/g, ' ').trim();
+    t = t.replace(/^[-–—\s]+|[-–—\s]+$/g, '').trim();
+    return t;
+  };
+
+  // Year: first 19xx/20xx occurrence, in parens or bare.
+  const yearMatch = name.match(/(19|20)\d{2}/);
+  const year = yearMatch ? parseInt(yearMatch[0], 10) : undefined;
+  // Everything before the year is the title; tags after it are dropped.
+  let title = yearMatch ? cleanTail(name.slice(0, yearMatch.index)) : cleanTail(name);
+  if (!title || title.length < 2) {
+    // Year was part of the title itself (e.g. "2001: A Space Odyssey") —
+    // fall back to cleaning the whole name without cutting at the year.
+    title = cleanTail(name);
+  }
+  return { title: title || rawName, year };
 };
 
 const FileBrowser = ({ onFileSelect, currentPath, onPathChange, searchQuery = '', onSearchChange, isHomepage = false, onFavoritesChange, onWatchLaterChange }) => {
@@ -99,6 +121,9 @@ const FileBrowser = ({ onFileSelect, currentPath, onPathChange, searchQuery = ''
   const [mediaMetadata, setMediaMetadata] = useState({}); // Store metadata by file path
   const [loadingMetadata, setLoadingMetadata] = useState(new Set());
   const [mediaDetails, setMediaDetails] = useState(null); // Full media details for the directory
+  const [folderPosters, setFolderPosters] = useState({}); // Poster URL by folder path
+  const [failedPosters, setFailedPosters] = useState(new Set()); // File paths whose poster image failed to load
+  const folderPosterCache = useRef({}); // path -> poster URL (or null when none found); looked up once
   const [favorites, setFavorites] = useState(new Set());
   const [watchLater, setWatchLater] = useState(new Set());
 
@@ -119,6 +144,7 @@ const FileBrowser = ({ onFileSelect, currentPath, onPathChange, searchQuery = ''
     setLoading(true);
     setError(null);
     setMediaDetails(null);
+    setFailedPosters(new Set());
     try {
       const fileList = await api.listFiles(path);
       console.log('Loaded files:', fileList);
@@ -146,7 +172,7 @@ const FileBrowser = ({ onFileSelect, currentPath, onPathChange, searchQuery = ''
     setLoadingMetadata(prev => new Set(prev).add(filePath));
     
     try {
-      const mediaName = extractMediaName(file);
+      const { title: mediaName, year } = extractMediaName(file);
       if (!mediaName || mediaName.length < 3) {
         setLoadingMetadata(prev => {
           const next = new Set(prev);
@@ -156,7 +182,7 @@ const FileBrowser = ({ onFileSelect, currentPath, onPathChange, searchQuery = ''
         return;
       }
 
-      const searchResults = await api.searchMedia(mediaName, 'multi');
+      const searchResults = await api.searchMedia(mediaName, 'multi', year);
       if (searchResults.results && searchResults.results.length > 0) {
         const firstResult = searchResults.results[0];
         setMediaMetadata(prev => ({
@@ -283,6 +309,43 @@ const FileBrowser = ({ onFileSelect, currentPath, onPathChange, searchQuery = ''
       }
     }
   }, [mediaMetadata, files]);
+
+  // Folder posters: look each folder name up on TMDB once (max 3 lookups at
+  // a time) and show the poster instead of only an emoji icon. Results are
+  // cached by path in folderPosterCache, so a folder is never looked up
+  // twice and no request fires per render.
+  useEffect(() => {
+    if (!directories.length) return;
+    const queue = directories.filter(d => !(d.path in folderPosterCache.current));
+    if (!queue.length) return;
+    let cancelled = false;
+
+    const loadOne = async (dir) => {
+      // Mark in the cache up-front so a re-render cannot queue it again.
+      folderPosterCache.current[dir.path] = null;
+      const { title, year } = extractMediaName(dir);
+      if (!title || title.length < 3) return;
+      try {
+        const res = await api.searchMedia(title, 'multi', year);
+        const poster = res.results?.[0]?.posterPath || null;
+        folderPosterCache.current[dir.path] = poster;
+        if (poster && !cancelled) {
+          setFolderPosters(prev => (prev[dir.path] === poster ? prev : { ...prev, [dir.path]: poster }));
+        }
+      } catch (err) {
+        console.error('Error loading folder poster for', dir.name, err);
+      }
+    };
+
+    const workers = Array.from({ length: Math.min(3, queue.length) }, async () => {
+      while (!cancelled && queue.length) {
+        const dir = queue.shift();
+        if (dir) await loadOne(dir);
+      }
+    });
+    Promise.all(workers).catch(() => {});
+    return () => { cancelled = true; };
+  }, [directories]);
 
   if (loading) {
     return (
@@ -572,24 +635,47 @@ const FileBrowser = ({ onFileSelect, currentPath, onPathChange, searchQuery = ''
                 <div>
                   <h2 className="text-lg sm:text-xl font-semibold text-white mb-4">Folders</h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
-                    {directories.map((dir, index) => (
+                    {directories.map((dir, index) => {
+                      const dirPoster = folderPosters[dir.path];
+                      const dirName = getFullFileName(dir);
+                      return (
                       <div
                         key={index}
                         className="group cursor-pointer"
                         onClick={() => handleFileClick(dir)}
                       >
                         <div className="relative aspect-[2/3] bg-gradient-to-br from-[#1a2332] to-[#0f1419] rounded-lg overflow-hidden border border-white/10 hover:border-[#00A8E1]/50 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-[#00A8E1]/20">
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-6xl sm:text-7xl md:text-8xl opacity-80 group-hover:opacity-100 transition-opacity filter drop-shadow-lg">
-                              {getFolderIcon(getFullFileName(dir))}
-                            </span>
-                          </div>
+                          {dirPoster ? (
+                            <img
+                              src={dirPoster}
+                              alt={dirName}
+                              loading="lazy"
+                              className="w-full h-full object-cover"
+                              onError={() => {
+                                // Broken poster URL: drop back to the emoji icon.
+                                folderPosterCache.current[dir.path] = null;
+                                setFolderPosters(prev => {
+                                  if (!(dir.path in prev)) return prev;
+                                  const next = { ...prev };
+                                  delete next[dir.path];
+                                  return next;
+                                });
+                              }}
+                            />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-6xl sm:text-7xl md:text-8xl opacity-80 group-hover:opacity-100 transition-opacity filter drop-shadow-lg">
+                                {getFolderIcon(dirName)}
+                              </span>
+                            </div>
+                          )}
                           <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/90 to-transparent">
-                            <p className="text-xs text-white font-medium truncate">{getFullFileName(dir)}</p>
+                            <p className="text-xs text-white font-medium truncate">{dirName}</p>
                           </div>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -602,7 +688,8 @@ const FileBrowser = ({ onFileSelect, currentPath, onPathChange, searchQuery = ''
                     {mediaFiles.map((file, index) => {
                       const metadata = mediaMetadata[file.path];
                       const isLoadingMeta = loadingMetadata.has(file.path);
-                      const posterUrl = metadata?.posterPath;
+                      const posterFailed = failedPosters.has(file.path);
+                      const posterUrl = posterFailed ? null : metadata?.posterPath;
                       const fileName = getFullFileName(file);
                       
                       return (
@@ -618,8 +705,15 @@ const FileBrowser = ({ onFileSelect, currentPath, onPathChange, searchQuery = ''
                                 src={posterUrl}
                                 alt={fileName}
                                 className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  e.target.style.display = 'none';
+                                onError={() => {
+                                  // Broken poster URL: show the title text
+                                  // instead of hiding the image (blank card).
+                                  setFailedPosters(prev => {
+                                    if (prev.has(file.path)) return prev;
+                                    const next = new Set(prev);
+                                    next.add(file.path);
+                                    return next;
+                                  });
                                 }}
                               />
                             ) : isLoadingMeta ? (
@@ -627,11 +721,8 @@ const FileBrowser = ({ onFileSelect, currentPath, onPathChange, searchQuery = ''
                                 <div className="w-8 h-8 border-2 border-[#00A8E1] border-t-transparent rounded-full animate-spin"></div>
                               </div>
                             ) : (
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/40">
-                                  <polygon points="23 7 16 12 23 17 23 7"/>
-                                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-                                </svg>
+                              <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center">
+                                <p className="text-sm font-bold leading-snug text-white/90 line-clamp-4">{fileName}</p>
                               </div>
                             )}
                             

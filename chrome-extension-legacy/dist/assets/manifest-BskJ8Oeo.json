@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "DhakaFlix-Addon",
+  "version": "1.0.0",
+  "description": "Stream media files from HTTP directory listings without CORS restrictions",
+  "permissions": [
+    "storage",
+    "background"
+  ],
+  "host_permissions": [
+    "http://cdn.dflix.live/*",
+    "https://api.themoviedb.org/*",
+    "https://image.tmdb.org/*",
+    "https://rest.opensubtitles.org/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "DhakaFlix",
+    "default_icon": {
+      "16": "logo192.png",
+      "48": "logo192.png",
+      "128": "logo512.png"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

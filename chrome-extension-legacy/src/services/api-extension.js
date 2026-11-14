@@ -2,7 +2,7 @@
 // This version is for browser extension use
 
 const HTTP_SERVER_URL = import.meta.env.VITE_HTTP_SERVER_URL || 'http://cdn.dflix.live';
-const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY || '8c4e4c4e4c4e4c4e4c4e4c4e4c4e4c4e';
+import { getTmdbKey } from './tmdbKey.js';
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 
 // Check if we're running as an extension
@@ -317,18 +317,24 @@ export const api = {
     return HTTP_SERVER_URL + filePath;
   },
 
-  async searchMedia(query, type = 'multi') {
+  async searchMedia(query, type = 'multi', year) {
     try {
       const cleanQuery = query.trim().replace(/\s*-\s*$/, '').trim();
+      const apiKey = getTmdbKey();
+      if (!apiKey) {
+        console.warn('[API] TMDB API key missing - posters cannot load. Add your free key in the app settings (header) or set VITE_TMDB_API_KEY in .env. Get one at themoviedb.org -> Settings -> API.');
+        return { results: [], total_results: 0 };
+      }
       const timestamp = Date.now();
+      const yearParam = year && type !== 'multi' ? `&year=${encodeURIComponent(year)}` : '';
       
       let searchUrl;
       if (type === 'multi') {
-        searchUrl = `${TMDB_BASE_URL}/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(cleanQuery)}&language=en-US&_t=${timestamp}`;
+        searchUrl = `${TMDB_BASE_URL}/search/multi?api_key=${apiKey}&query=${encodeURIComponent(cleanQuery)}${yearParam}&language=en-US&_t=${timestamp}`;
       } else if (type === 'movie') {
-        searchUrl = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(cleanQuery)}&language=en-US&_t=${timestamp}`;
+        searchUrl = `${TMDB_BASE_URL}/search/movie?api_key=${apiKey}&query=${encodeURIComponent(cleanQuery)}${yearParam}&language=en-US&_t=${timestamp}`;
       } else if (type === 'tv') {
-        searchUrl = `${TMDB_BASE_URL}/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(cleanQuery)}&language=en-US&_t=${timestamp}`;
+        searchUrl = `${TMDB_BASE_URL}/search/tv?api_key=${apiKey}&query=${encodeURIComponent(cleanQuery)}${yearParam}&language=en-US&_t=${timestamp}`;
       } else {
         throw new Error('Invalid type. Use "movie", "tv", or "multi"');
       }
@@ -348,7 +354,7 @@ export const api = {
       }
       
       const data = JSON.parse(responseData.text);
-      const results = (data.results || []).slice(0, 5).map(item => {
+      let results = (data.results || []).map(item => {
         const isMovie = item.media_type === 'movie' || type === 'movie';
         
         return {
@@ -365,6 +371,12 @@ export const api = {
           genreIds: item.genre_ids || []
         };
       });
+
+      if (year) {
+        const y = String(year);
+        results.sort((a, b) => ((a.releaseDate || '').startsWith(y) ? 0 : 1) - ((b.releaseDate || '').startsWith(y) ? 0 : 1));
+      }
+      results = results.slice(0, 5);
       
       console.log(`[API] Found ${results.length} media results`);
       return { results, total_results: data.total_results || 0 };
@@ -377,7 +389,11 @@ export const api = {
   async getMediaDetails(id, type = 'movie') {
     try {
       const endpoint = type === 'tv' ? 'tv' : 'movie';
-      const detailsUrl = `${TMDB_BASE_URL}/${endpoint}/${id}?api_key=${TMDB_API_KEY}&language=en-US&append_to_response=credits,videos&_t=${Date.now()}`;
+      const apiKey = getTmdbKey();
+      if (!apiKey) {
+        throw new Error('TMDB API key missing - add your free TMDB API key in the app settings (header) or set VITE_TMDB_API_KEY in .env to load posters. Get one at themoviedb.org -> Settings -> API.');
+      }
+      const detailsUrl = `${TMDB_BASE_URL}/${endpoint}/${id}?api_key=${apiKey}&language=en-US&append_to_response=credits,videos&_t=${Date.now()}`;
       
       console.log(`[API] Fetching media details: ${id} (type: ${type})`);
       

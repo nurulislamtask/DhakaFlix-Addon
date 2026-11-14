@@ -4,6 +4,7 @@ import MediaPlayer from './components/MediaPlayer.jsx';
 import FavoritesSection from './components/FavoritesSection.jsx';
 import WatchLaterSection from './components/WatchLaterSection.jsx';
 import { api } from './services/api';
+import { TMDB_KEY_STORAGE_KEY } from './services/tmdbKey';
 
 // Helper to check if a path is likely a file (has extension)
 const isFilePath = (path) => {
@@ -86,6 +87,27 @@ function App() {
   useEffect(() => {
     localStorage.setItem('autostart', autostart.toString());
   }, [autostart]);
+
+  // TMDB API key for posters (persisted in localStorage). Poster lookups
+  // read it fresh on every call, so saving here takes effect immediately.
+  const [tmdbKey, setTmdbKey] = useState(() => {
+    try {
+      return localStorage.getItem(TMDB_KEY_STORAGE_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
+  const [tmdbKeySaved, setTmdbKeySaved] = useState(false);
+
+  const saveTmdbKey = () => {
+    try {
+      localStorage.setItem(TMDB_KEY_STORAGE_KEY, tmdbKey.trim());
+    } catch (e) {
+      console.error('Could not save TMDB API key:', e);
+    }
+    setTmdbKeySaved(true);
+    setTimeout(() => setTmdbKeySaved(false), 2500);
+  };
 
   // Update URL when path changes (but not during initial file load)
   useEffect(() => {
@@ -396,6 +418,24 @@ function App() {
               </span>
             </label>
           </div>
+
+          {/* TMDB API key — posters need a free TMDB key (v3) */}
+          <div className="hidden lg:flex items-center gap-2" title="Posters load from TMDB — paste your free API key here">
+            <input
+              type="password"
+              value={tmdbKey}
+              onChange={(e) => setTmdbKey(e.target.value)}
+              placeholder="TMDB API key"
+              autoComplete="off"
+              className="w-40 px-3 py-2 bg-white/10 border border-white/20 rounded text-white placeholder-white/40 focus:outline-none focus:border-[#00A8E1] text-sm"
+            />
+            <button
+              onClick={saveTmdbKey}
+              className="px-3 py-2 bg-[#00A8E1] hover:bg-[#0099d1] text-white rounded text-sm font-semibold transition-colors active:scale-95"
+            >
+              {tmdbKeySaved ? 'Saved ✓' : 'Save'}
+            </button>
+          </div>
           
           {/* Search Bar - Amazon Prime style */}
           <div className="flex items-center gap-3">
@@ -439,6 +479,9 @@ function App() {
             </button>
           </div>
         </div>
+        {!tmdbKey.trim() && (
+          <p className="mt-2 text-[11.5px] text-amber-300/90">Add your free TMDB API key to load posters — themoviedb.org → Settings → API. (The key is stored only in this browser.)</p>
+        )}
       </header>
       {currentPath === '/' ? (
         <div className="flex-1 overflow-y-auto">

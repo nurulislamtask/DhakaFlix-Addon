@@ -75,6 +75,14 @@ The built files will be in the `dist` directory and can be served by any static 
 
 ## Troubleshooting
 
+### Posters not loading?
+
+Movie posters come from TMDB and need a free TMDB API key (v3). Without one,
+the file list and playback still work, but no poster image loads.
+- **In the app:** paste your key in the header's "TMDB API key" box and press Save.
+- **Or in `.env`:** copy `.env.example` to `.env` and set `VITE_TMDB_API_KEY`, then rebuild.
+- Get a free key at https://www.themoviedb.org/settings/api (Settings → API).
+
 ### CORS Errors
 
 If you see CORS errors in the browser console:

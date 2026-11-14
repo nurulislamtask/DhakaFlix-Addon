@@ -10,6 +10,7 @@
   "host_permissions": [
     "http://cdn.dflix.live/*",
     "https://api.themoviedb.org/*",
+    "https://image.tmdb.org/*",
     "https://rest.opensubtitles.org/*"
   ],
   "background": {
