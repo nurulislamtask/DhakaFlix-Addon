@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "PirateFlix - FTP Streaming",
+  "name": "DhakaFlix-Addon",
   "version": "1.0.0",
   "description": "Stream media files from HTTP directory listings without CORS restrictions",
   "permissions": [
@@ -17,7 +17,7 @@
     "type": "module"
   },
   "action": {
-    "default_title": "PirateFlix",
+    "default_title": "DhakaFlix",
     "default_icon": {
       "16": "logo192.png",
       "48": "logo192.png",
@@ -34,4 +34,3 @@
     }
   ]
 }
-
