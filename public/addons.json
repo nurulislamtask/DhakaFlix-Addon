@@ -1,0 +1,9 @@
+[
+  {
+    "name": "DhakaFlix BDIX",
+    "description": "Movies & series from the DhakaFlix open directory, with a real poster for every title.",
+    "repo": "nurulislamtask/DhakaFlix-Addon",
+    "manifest": "self",
+    "types": ["Movies", "Series"]
+  }
+]
